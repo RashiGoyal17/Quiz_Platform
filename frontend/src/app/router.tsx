@@ -7,6 +7,8 @@ import { RoleGuard } from "../components/routing/RoleGuard";
 import { RoleRedirect } from "../components/routing/RoleRedirect";
 import { ROUTES } from "../constants/routes";
 import { NotFoundPage } from "../pages/NotFoundPage";
+import { AdminAttemptDetailPage } from "../pages/admin/AdminAttemptDetailPage";
+import { AdminAttemptsPage } from "../pages/admin/AdminAttemptsPage";
 import { AdminDashboardPage } from "../pages/admin/AdminDashboardPage";
 import { QuestionBanksPage } from "../pages/admin/QuestionBanksPage";
 import { QuestionsPage } from "../pages/admin/QuestionsPage";
@@ -40,6 +42,8 @@ export const router = createBrowserRouter([
               { path: ROUTES.admin.questions, element: <QuestionsPage /> },
               { path: ROUTES.admin.quizzes, element: <QuizzesPage /> },
               { path: ROUTES.admin.quizBuilderPath, element: <QuizBuilderPage /> },
+              { path: ROUTES.admin.attempts, element: <AdminAttemptsPage /> },
+              { path: ROUTES.admin.attemptDetailPath, element: <AdminAttemptDetailPage /> },
             ],
           },
         ],

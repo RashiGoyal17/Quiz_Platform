@@ -29,6 +29,7 @@ from app.services.analytics_service import MIN_ATTEMPTS_FOR_RANKING, AnalyticsSe
 pytestmark = pytest.mark.asyncio
 
 _NOW = datetime.now(timezone.utc)
+_ORG_ID = uuid.uuid4()
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -302,24 +303,24 @@ class TestGetStudentHistory:
 class TestGetQuizAnalytics:
 
     def _wire(self, svc, quiz, stats, ac, most_common=None):
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=quiz)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=quiz)
         svc.analytics_repo.get_quiz_stats = AsyncMock(return_value=stats)
         svc.analytics_repo.get_quiz_anti_cheat_stats = AsyncMock(return_value=ac)
         svc.analytics_repo.get_quiz_most_common_event = AsyncMock(return_value=most_common)
 
     async def test_quiz_not_found_raises_lookup_error(self):
         svc = _svc()
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=None)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=None)
 
         with pytest.raises(LookupError, match="Quiz not found"):
-            await svc.get_quiz_analytics(uuid.uuid4())
+            await svc.get_quiz_analytics(uuid.uuid4(), _ORG_ID)
 
     async def test_quiz_title_in_response(self):
         svc = _svc()
         quiz = _make_quiz(title="History Final")
         self._wire(svc, quiz, _quiz_stats_row(), _anti_cheat())
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.quiz_title == "History Final"
 
@@ -332,7 +333,7 @@ class TestGetQuizAnalytics:
             _anti_cheat(),
         )
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.total_attempts == 10
 
@@ -346,7 +347,7 @@ class TestGetQuizAnalytics:
             _anti_cheat(),
         )
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.completion_rate == Decimal("80.00")
 
@@ -355,7 +356,7 @@ class TestGetQuizAnalytics:
         quiz = _make_quiz()
         self._wire(svc, quiz, _quiz_stats_row(in_progress_count=3), _anti_cheat())
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.completion_rate == Decimal("0.00")
 
@@ -369,7 +370,7 @@ class TestGetQuizAnalytics:
             _anti_cheat(),
         )
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.abandonment_rate == Decimal("25.00")
 
@@ -383,7 +384,7 @@ class TestGetQuizAnalytics:
             _anti_cheat(),
         )
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.timeout_rate == Decimal("50.00")
 
@@ -392,7 +393,7 @@ class TestGetQuizAnalytics:
         quiz = _make_quiz()
         self._wire(svc, quiz, _quiz_stats_row(average_score=None), _anti_cheat())
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.average_score is None
 
@@ -401,7 +402,7 @@ class TestGetQuizAnalytics:
         quiz = _make_quiz()
         self._wire(svc, quiz, _quiz_stats_row(), _anti_cheat(total_tab_switches=14))
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.anti_cheat.total_tab_switches == 14
 
@@ -410,7 +411,7 @@ class TestGetQuizAnalytics:
         quiz = _make_quiz()
         self._wire(svc, quiz, _quiz_stats_row(), _anti_cheat(avg_tab_switches=None))
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.anti_cheat.average_tab_switches_per_attempt is None
 
@@ -423,7 +424,7 @@ class TestGetQuizAnalytics:
             _anti_cheat(attempts_with_proctoring_events=5),
         )
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.anti_cheat.attempts_with_proctoring_events == 5
 
@@ -432,7 +433,7 @@ class TestGetQuizAnalytics:
         quiz = _make_quiz()
         self._wire(svc, quiz, _quiz_stats_row(), _anti_cheat(), most_common=None)
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.anti_cheat.most_common_proctoring_event is None
 
@@ -441,7 +442,7 @@ class TestGetQuizAnalytics:
         quiz = _make_quiz()
         self._wire(svc, quiz, _quiz_stats_row(), _anti_cheat(), most_common="window_blur")
 
-        result = await svc.get_quiz_analytics(quiz.id)
+        result = await svc.get_quiz_analytics(quiz.id, _ORG_ID)
 
         assert result.anti_cheat.most_common_proctoring_event == "window_blur"
 
@@ -451,22 +452,22 @@ class TestGetQuizAnalytics:
 class TestGetQuizQuestionAnalytics:
 
     def _wire(self, svc, quiz, rows):
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=quiz)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=quiz)
         svc.analytics_repo.get_quiz_question_stats = AsyncMock(return_value=rows)
 
     async def test_quiz_not_found_raises_lookup_error(self):
         svc = _svc()
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=None)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=None)
 
         with pytest.raises(LookupError, match="Quiz not found"):
-            await svc.get_quiz_question_analytics(uuid.uuid4())
+            await svc.get_quiz_question_analytics(uuid.uuid4(), _ORG_ID)
 
     async def test_empty_questions_list_when_no_finalized_attempts(self):
         svc = _svc()
         quiz = _make_quiz()
         self._wire(svc, quiz, [])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         assert isinstance(result, QuizQuestionAnalyticsResponse)
         assert result.questions == []
@@ -477,7 +478,7 @@ class TestGetQuizQuestionAnalytics:
         row = _question_row(total_seen=20, correct_count=15, incorrect_count=5, answered_count=20)
         self._wire(svc, quiz, [row])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         assert result.questions[0].correct_pct == Decimal("75.00")
 
@@ -487,7 +488,7 @@ class TestGetQuizQuestionAnalytics:
         row = _question_row(total_seen=20, correct_count=15, incorrect_count=5, answered_count=20)
         self._wire(svc, quiz, [row])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         assert result.questions[0].incorrect_pct == Decimal("25.00")
 
@@ -498,7 +499,7 @@ class TestGetQuizQuestionAnalytics:
         row = _question_row(total_seen=20, correct_count=12, incorrect_count=3, answered_count=15)
         self._wire(svc, quiz, [row])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         assert result.questions[0].unanswered_pct == Decimal("25.00")
 
@@ -508,7 +509,7 @@ class TestGetQuizQuestionAnalytics:
         row = _question_row(total_seen=0, correct_count=0, incorrect_count=0, answered_count=0)
         self._wire(svc, quiz, [row])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         q = result.questions[0]
         assert q.correct_pct is None
@@ -526,7 +527,7 @@ class TestGetQuizQuestionAnalytics:
         )
         self._wire(svc, quiz, [row])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         assert result.questions[0].difficulty_rank == 1
         assert result.questions[0].insufficient_data is False
@@ -542,7 +543,7 @@ class TestGetQuizQuestionAnalytics:
         )
         self._wire(svc, quiz, [row])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         assert result.questions[0].difficulty_rank is None
 
@@ -557,7 +558,7 @@ class TestGetQuizQuestionAnalytics:
         )
         self._wire(svc, quiz, [row])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         assert result.questions[0].insufficient_data is True
 
@@ -572,7 +573,7 @@ class TestGetQuizQuestionAnalytics:
         )
         self._wire(svc, quiz, [row])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         assert result.questions[0].insufficient_data is False
 
@@ -585,7 +586,7 @@ class TestGetQuizQuestionAnalytics:
         q2 = _question_row(total_seen=20, correct_count=16, incorrect_count=4, answered_count=20)
         self._wire(svc, quiz, [q2, q1])  # deliberately reversed input order
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         ranked = sorted(
             [q for q in result.questions if q.difficulty_rank is not None],
@@ -611,7 +612,7 @@ class TestGetQuizQuestionAnalytics:
         )
         self._wire(svc, quiz, [rankable, insufficient])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         assert result.questions[0].insufficient_data is False
         assert result.questions[0].difficulty_rank == 1
@@ -623,7 +624,7 @@ class TestGetQuizQuestionAnalytics:
         quiz = _make_quiz()
         self._wire(svc, quiz, [])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         assert result.min_attempts_for_ranking == MIN_ATTEMPTS_FOR_RANKING
 
@@ -634,7 +635,7 @@ class TestGetQuizQuestionAnalytics:
         row = _question_row(total_seen=5, correct_count=3, incorrect_count=2, answered_count=5)
         self._wire(svc, quiz, [row])
 
-        result = await svc.get_quiz_question_analytics(quiz.id)
+        result = await svc.get_quiz_question_analytics(quiz.id, _ORG_ID)
 
         q = result.questions[0]
         assert q.insufficient_data is True
@@ -646,8 +647,8 @@ class TestGetQuizQuestionAnalytics:
 class TestGetAdminDashboard:
 
     def _wire(self, svc, platform, total_events, recent):
-        svc.analytics_repo.get_platform_stats = AsyncMock(return_value=platform)
-        svc.analytics_repo.get_platform_total_proctoring_events = AsyncMock(
+        svc.analytics_repo.get_org_stats = AsyncMock(return_value=platform)
+        svc.analytics_repo.get_org_total_proctoring_events = AsyncMock(
             return_value=total_events
         )
         svc.analytics_repo.get_recent_activity = AsyncMock(return_value=recent)
@@ -656,7 +657,7 @@ class TestGetAdminDashboard:
         svc = _svc()
         self._wire(svc, _platform_row(total_users=50), 0, [])
 
-        result = await svc.get_admin_dashboard()
+        result = await svc.get_admin_dashboard(_ORG_ID)
 
         assert isinstance(result, AdminDashboardResponse)
         assert result.total_users == 50
@@ -665,7 +666,7 @@ class TestGetAdminDashboard:
         svc = _svc()
         self._wire(svc, _platform_row(total_students=40, total_admins=10), 0, [])
 
-        result = await svc.get_admin_dashboard()
+        result = await svc.get_admin_dashboard(_ORG_ID)
 
         assert result.total_students == 40
         assert result.total_admins == 10
@@ -674,7 +675,7 @@ class TestGetAdminDashboard:
         svc = _svc()
         self._wire(svc, _platform_row(total_quizzes=20, published_quizzes=15), 0, [])
 
-        result = await svc.get_admin_dashboard()
+        result = await svc.get_admin_dashboard(_ORG_ID)
 
         assert result.total_quizzes == 20
         assert result.published_quizzes == 15
@@ -693,7 +694,7 @@ class TestGetAdminDashboard:
             0, [],
         )
 
-        result = await svc.get_admin_dashboard()
+        result = await svc.get_admin_dashboard(_ORG_ID)
 
         assert result.total_attempts == 100
         assert result.in_progress_attempts == 10
@@ -705,7 +706,7 @@ class TestGetAdminDashboard:
         svc = _svc()
         self._wire(svc, _platform_row(total_tab_switches=300), 0, [])
 
-        result = await svc.get_admin_dashboard()
+        result = await svc.get_admin_dashboard(_ORG_ID)
 
         assert result.total_tab_switches == 300
 
@@ -713,7 +714,7 @@ class TestGetAdminDashboard:
         svc = _svc()
         self._wire(svc, _platform_row(avg_tab_switches=None), 0, [])
 
-        result = await svc.get_admin_dashboard()
+        result = await svc.get_admin_dashboard(_ORG_ID)
 
         assert result.average_tab_switches_per_attempt is None
 
@@ -721,7 +722,7 @@ class TestGetAdminDashboard:
         svc = _svc()
         self._wire(svc, _platform_row(avg_tab_switches=2.666667), 0, [])
 
-        result = await svc.get_admin_dashboard()
+        result = await svc.get_admin_dashboard(_ORG_ID)
 
         assert result.average_tab_switches_per_attempt == Decimal("2.67")
 
@@ -729,7 +730,7 @@ class TestGetAdminDashboard:
         svc = _svc()
         self._wire(svc, _platform_row(), 42, [])
 
-        result = await svc.get_admin_dashboard()
+        result = await svc.get_admin_dashboard(_ORG_ID)
 
         assert result.total_proctoring_events == 42
 
@@ -738,7 +739,7 @@ class TestGetAdminDashboard:
         row = _activity_row(student_username="bob", quiz_title="Science Quiz")
         self._wire(svc, _platform_row(), 0, [row])
 
-        result = await svc.get_admin_dashboard()
+        result = await svc.get_admin_dashboard(_ORG_ID)
 
         assert len(result.recent_attempts) == 1
         assert result.recent_attempts[0].student_username == "bob"
@@ -748,6 +749,6 @@ class TestGetAdminDashboard:
         svc = _svc()
         self._wire(svc, _platform_row(), 0, [])
 
-        result = await svc.get_admin_dashboard()
+        result = await svc.get_admin_dashboard(_ORG_ID)
 
         assert result.recent_attempts == []

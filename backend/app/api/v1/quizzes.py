@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_admin, require_student
+from app.api.deps import require_admin_with_org, require_student
 from app.database import get_db
 from app.models.user import User
 from app.schemas.quiz import (
@@ -40,10 +40,11 @@ def _handle(exc: Exception) -> None:
 async def create_quiz(
     body: QuizCreate,
     svc: QuizService = Depends(_svc),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuizResponse:
     quiz = await svc.create_quiz(
         creator_id=admin.id,
+        organization_id=admin.organization_id,
         title=body.title,
         description=body.description,
         duration_minutes=body.duration_minutes,
@@ -65,9 +66,9 @@ async def create_quiz(
 )
 async def list_quizzes(
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> list[QuizResponse]:
-    quizzes = await svc.list_quizzes()
+    quizzes = await svc.list_quizzes(admin.organization_id)
     return [QuizResponse.model_validate(q) for q in quizzes]
 
 
@@ -122,10 +123,10 @@ async def list_available_quizzes(
 async def get_quiz(
     quiz_id: uuid.UUID,
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuizResponse:
     try:
-        quiz = await svc.get_quiz(quiz_id)
+        quiz = await svc.get_quiz(quiz_id, admin.organization_id)
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return QuizResponse.model_validate(quiz)
@@ -140,11 +141,11 @@ async def update_quiz(
     quiz_id: uuid.UUID,
     body: QuizUpdate,
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuizResponse:
     updates = body.model_dump(exclude_unset=True)
     try:
-        quiz = await svc.update_quiz(quiz_id, updates)
+        quiz = await svc.update_quiz(quiz_id, admin.organization_id, updates)
     except (LookupError, ValueError) as e:
         _handle(e)
     return QuizResponse.model_validate(quiz)
@@ -160,10 +161,10 @@ async def update_quiz(
 async def publish_quiz(
     quiz_id: uuid.UUID,
     svc: QuizService = Depends(_svc),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuizResponse:
     try:
-        quiz = await svc.publish_quiz(quiz_id, admin.id)
+        quiz = await svc.publish_quiz(quiz_id, admin.organization_id, admin.id)
     except (LookupError, ValueError) as e:
         _handle(e)
     return QuizResponse.model_validate(quiz)
@@ -177,10 +178,10 @@ async def publish_quiz(
 async def unpublish_quiz(
     quiz_id: uuid.UUID,
     svc: QuizService = Depends(_svc),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuizResponse:
     try:
-        quiz = await svc.unpublish_quiz(quiz_id, admin.id)
+        quiz = await svc.unpublish_quiz(quiz_id, admin.organization_id, admin.id)
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return QuizResponse.model_validate(quiz)
@@ -198,11 +199,12 @@ async def add_question_to_quiz(
     quiz_id: uuid.UUID,
     body: AddQuestionToQuiz,
     svc: QuizService = Depends(_svc),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuizQuestionResponse:
     try:
         qq = await svc.add_question_to_quiz(
             quiz_id=quiz_id,
+            organization_id=admin.organization_id,
             question_id=body.question_id,
             position=body.position,
             marks_override=body.marks_override,
@@ -222,10 +224,10 @@ async def remove_question_from_quiz(
     quiz_id: uuid.UUID,
     question_id: uuid.UUID,
     svc: QuizService = Depends(_svc),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> None:
     try:
-        await svc.remove_question_from_quiz(quiz_id, question_id, admin.id)
+        await svc.remove_question_from_quiz(quiz_id, admin.organization_id, question_id, admin.id)
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -238,10 +240,10 @@ async def remove_question_from_quiz(
 async def list_quiz_questions(
     quiz_id: uuid.UUID,
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> list[QuizQuestionResponse]:
     try:
-        rows = await svc.list_quiz_questions(quiz_id)
+        rows = await svc.list_quiz_questions(quiz_id, admin.organization_id)
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return [QuizQuestionResponse.model_validate(r) for r in rows]

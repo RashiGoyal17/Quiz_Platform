@@ -10,6 +10,7 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.models.attempt import Attempt
+    from app.models.organization import Organization
     from app.models.quiz_question import QuizQuestion
     from app.models.user import User
 
@@ -20,6 +21,12 @@ class Quiz(Base, UUIDMixin, TimestampMixin):
     creator_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
@@ -36,6 +43,7 @@ class Quiz(Base, UUIDMixin, TimestampMixin):
     max_tab_switches: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     creator: Mapped["User"] = relationship(back_populates="quizzes")
+    organization: Mapped["Organization"] = relationship(back_populates="quizzes")
     quiz_questions: Mapped[list["QuizQuestion"]] = relationship(
         back_populates="quiz", cascade="all, delete-orphan"
     )

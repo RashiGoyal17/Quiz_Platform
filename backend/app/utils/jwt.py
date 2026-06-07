@@ -6,11 +6,12 @@ from jose import JWTError, jwt
 from app.config import settings
 
 
-def create_access_token(user_id: UUID, role: str) -> str:
+def create_access_token(user_id: UUID, role: str, organization_id: UUID | None = None) -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
         "role": role,
+        "organization_id": str(organization_id) if organization_id else None,
         "type": "access",
         "iat": now,
         "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),

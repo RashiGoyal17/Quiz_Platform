@@ -43,5 +43,10 @@ export const ENDPOINTS = {
   analytics: {
     me: "/analytics/me",
     meHistory: "/analytics/me/history",
+    adminDashboard: "/analytics/admin/dashboard",
+  },
+  adminAttempts: {
+    list: "/admin/attempts",
+    audit: (attemptId: string) => `/admin/attempts/${attemptId}/audit`,
   },
 } as const;

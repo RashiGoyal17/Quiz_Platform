@@ -252,6 +252,69 @@ export interface StudentHistoryParams {
   quizId?: string;
 }
 
+export interface RecentActivityItem {
+  attempt_id: string;
+  student_id: string;
+  student_username: string;
+  quiz_id: string;
+  quiz_title: string;
+  status: string;
+  score: number | null;
+  started_at: string;
+  submitted_at: string | null;
+}
+
+export interface AttemptAdminItem {
+  id: string;
+  quiz_id: string;
+  student_id: string;
+  attempt_number: number;
+  status: string;
+  started_at: string;
+  submitted_at: string | null;
+  score: number | null;
+  tab_switch_count: number;
+  ip_address: string | null;
+  created_at: string;
+}
+
+export interface AdminAttemptFilters {
+  status?: string;
+  quizId?: string;
+  studentId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface TabSwitchLog {
+  id: string;
+  switched_at: string;
+}
+
+export interface AttemptAuditResponse {
+  attempt: AttemptAdminItem;
+  tab_switch_logs: TabSwitchLog[];
+  proctoring_events: ProctoringEventResponse[];
+}
+
+export interface AdminDashboard {
+  total_users: number;
+  total_students: number;
+  total_admins: number;
+  active_users: number;
+  total_quizzes: number;
+  published_quizzes: number;
+  total_attempts: number;
+  in_progress_attempts: number;
+  submitted_attempts: number;
+  timed_out_attempts: number;
+  abandoned_attempts: number;
+  total_tab_switches: number;
+  average_tab_switches_per_attempt: number | null;
+  total_proctoring_events: number;
+  recent_attempts: RecentActivityItem[];
+}
+
 export interface SaveAnswerRequest {
   attempt_question_id: string;
   selected_option_id: string | null;

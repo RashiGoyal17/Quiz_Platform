@@ -4,6 +4,7 @@ from app.models.attempt_question import AttemptQuestion
 from app.models.attempt_question_option import AttemptQuestionOption
 from app.models.base import Base, TimestampMixin, UUIDMixin
 from app.models.enums import AttemptStatus, ProctoringEventType, UserRole
+from app.models.organization import Organization
 from app.models.proctoring_event import ProctoringEvent
 from app.models.question import Question
 from app.models.question_bank import QuestionBank
@@ -22,6 +23,7 @@ __all__ = [
     "AttemptStatus",
     "ProctoringEventType",
     "User",
+    "Organization",
     "RefreshToken",
     "QuestionBank",
     "Question",
