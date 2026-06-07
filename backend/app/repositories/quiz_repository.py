@@ -17,6 +17,18 @@ class QuizRepository(BaseRepository[Quiz]):
         )
         return list(result.scalars().all())
 
+    async def get_by_organization(self, organization_id: UUID) -> list[Quiz]:
+        result = await self.session.execute(
+            select(Quiz).where(Quiz.organization_id == organization_id)
+        )
+        return list(result.scalars().all())
+
+    async def get_by_id_scoped(self, quiz_id: UUID, organization_id: UUID) -> Quiz | None:
+        result = await self.session.execute(
+            select(Quiz).where(Quiz.id == quiz_id, Quiz.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
     async def get_published(self, limit: int = 100, offset: int = 0) -> list[Quiz]:
         result = await self.session.execute(
             select(Quiz).where(Quiz.is_published.is_(True)).limit(limit).offset(offset)

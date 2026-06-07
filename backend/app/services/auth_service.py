@@ -42,6 +42,14 @@ class AuthService:
     async def register(
         self, name: str, email: str, password: str, role: UserRole
     ) -> TokenResponse:
+        # Phase 9B: admin accounts must belong to an organization (Tenant
+        # Boundary Rule #8), and organization/admin provisioning remains an
+        # internal operational process until a future Organization
+        # Invitations / Platform Admin phase exists. Public self-service
+        # registration is therefore student-only.
+        if role != UserRole.STUDENT:
+            raise ValueError("Self-service registration is only available for students")
+
         if await self.user_repo.email_exists(email):
             raise ValueError("Email already registered")
 
@@ -122,7 +130,7 @@ class AuthService:
     # ── internals ──────────────────────────────────────────────────────────
 
     async def _issue_token_pair(self, user: User) -> TokenResponse:
-        access_token = create_access_token(user.id, user.role.value)
+        access_token = create_access_token(user.id, user.role.value, user.organization_id)
         raw_refresh = create_refresh_token(user.id)
 
         refresh_token_obj = RefreshToken(

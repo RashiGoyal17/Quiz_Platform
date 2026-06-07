@@ -340,6 +340,9 @@ class TestLogProctoringEvent:
 
 # ── get_attempt_audit: proctoring_events populated ───────────────────────────
 
+_ORG_ID = uuid.uuid4()
+
+
 class TestGetAttemptAuditProctoringEvents:
 
     async def test_audit_includes_empty_proctoring_events_list(self):
@@ -348,11 +351,11 @@ class TestGetAttemptAuditProctoringEvents:
         student_id = uuid.uuid4()
         attempt = _make_attempt(student_id, uuid.uuid4())
 
-        svc.attempt_repo.get_by_id = AsyncMock(return_value=attempt)
+        svc.attempt_repo.get_by_id_scoped = AsyncMock(return_value=attempt)
         svc.tab_switch_log_repo.get_by_attempt = AsyncMock(return_value=[])
         svc.proctoring_event_repo.get_by_attempt = AsyncMock(return_value=[])
 
-        result = await svc.get_attempt_audit(attempt.id)
+        result = await svc.get_attempt_audit(attempt.id, _ORG_ID)
 
         assert isinstance(result, AttemptAuditResponse)
         assert result.proctoring_events == []
@@ -367,11 +370,11 @@ class TestGetAttemptAuditProctoringEvents:
         event_blur = _make_proctoring_event(attempt.id, ProctoringEventType.WINDOW_BLUR, {"duration_ms": 200})
         event_paste = _make_proctoring_event(attempt.id, ProctoringEventType.COPY_PASTE, {"content_length": 10})
 
-        svc.attempt_repo.get_by_id = AsyncMock(return_value=attempt)
+        svc.attempt_repo.get_by_id_scoped = AsyncMock(return_value=attempt)
         svc.tab_switch_log_repo.get_by_attempt = AsyncMock(return_value=[])
         svc.proctoring_event_repo.get_by_attempt = AsyncMock(return_value=[event_blur, event_paste])
 
-        result = await svc.get_attempt_audit(attempt.id)
+        result = await svc.get_attempt_audit(attempt.id, _ORG_ID)
 
         assert len(result.proctoring_events) == 2
         types = {e.event_type for e in result.proctoring_events}
@@ -386,20 +389,20 @@ class TestGetAttemptAuditProctoringEvents:
         meta = {"element_type": "textarea", "content_length": 99}
         event = _make_proctoring_event(attempt.id, ProctoringEventType.COPY_PASTE, meta)
 
-        svc.attempt_repo.get_by_id = AsyncMock(return_value=attempt)
+        svc.attempt_repo.get_by_id_scoped = AsyncMock(return_value=attempt)
         svc.tab_switch_log_repo.get_by_attempt = AsyncMock(return_value=[])
         svc.proctoring_event_repo.get_by_attempt = AsyncMock(return_value=[event])
 
-        result = await svc.get_attempt_audit(attempt.id)
+        result = await svc.get_attempt_audit(attempt.id, _ORG_ID)
 
         assert result.proctoring_events[0].metadata == meta
 
     async def test_audit_not_found_raises_lookup_error(self):
         svc = _svc()
-        svc.attempt_repo.get_by_id = AsyncMock(return_value=None)
+        svc.attempt_repo.get_by_id_scoped = AsyncMock(return_value=None)
 
         with pytest.raises(LookupError, match="Attempt not found"):
-            await svc.get_attempt_audit(uuid.uuid4())
+            await svc.get_attempt_audit(uuid.uuid4(), _ORG_ID)
 
     async def test_audit_tab_switch_logs_still_present(self):
         """Adding proctoring_events must not break existing tab_switch_logs field."""
@@ -411,11 +414,11 @@ class TestGetAttemptAuditProctoringEvents:
         log.id = uuid.uuid4()
         log.switched_at = datetime.now(timezone.utc)
 
-        svc.attempt_repo.get_by_id = AsyncMock(return_value=attempt)
+        svc.attempt_repo.get_by_id_scoped = AsyncMock(return_value=attempt)
         svc.tab_switch_log_repo.get_by_attempt = AsyncMock(return_value=[log])
         svc.proctoring_event_repo.get_by_attempt = AsyncMock(return_value=[])
 
-        result = await svc.get_attempt_audit(attempt.id)
+        result = await svc.get_attempt_audit(attempt.id, _ORG_ID)
 
         assert len(result.tab_switch_logs) == 1
         assert result.proctoring_events == []

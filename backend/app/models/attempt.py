@@ -13,6 +13,7 @@ from app.models.enums import AttemptStatus
 if TYPE_CHECKING:
     from app.models.attempt_answer import AttemptAnswer
     from app.models.attempt_question import AttemptQuestion
+    from app.models.organization import Organization
     from app.models.proctoring_event import ProctoringEvent
     from app.models.quiz import Quiz
     from app.models.tab_switch_log import TabSwitchLog
@@ -25,6 +26,7 @@ class Attempt(Base, UUIDMixin, TimestampMixin):
         UniqueConstraint("student_id", "quiz_id", "attempt_number", name="uq_attempt_student_quiz_number"),
         Index("ix_attempts_student_id", "student_id"),
         Index("ix_attempts_quiz_id", "quiz_id"),
+        Index("ix_attempts_organization_id_status", "organization_id", "status"),
     )
 
     student_id: Mapped[uuid.UUID] = mapped_column(
@@ -32,6 +34,11 @@ class Attempt(Base, UUIDMixin, TimestampMixin):
     )
     quiz_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("quizzes.id", ondelete="RESTRICT"), nullable=False
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[AttemptStatus] = mapped_column(
@@ -47,6 +54,7 @@ class Attempt(Base, UUIDMixin, TimestampMixin):
 
     student: Mapped["User"] = relationship(back_populates="attempts")
     quiz: Mapped["Quiz"] = relationship(back_populates="attempts")
+    organization: Mapped["Organization"] = relationship(back_populates="attempts")
     attempt_questions: Mapped[list["AttemptQuestion"]] = relationship(
         back_populates="attempt", cascade="all, delete-orphan"
     )

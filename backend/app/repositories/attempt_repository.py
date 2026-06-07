@@ -58,13 +58,14 @@ class AttemptRepository(BaseRepository[Attempt]):
 
     async def get_all_filtered(
         self,
+        organization_id: UUID,
         quiz_id: UUID | None = None,
         student_id: UUID | None = None,
         status: AttemptStatus | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[Attempt]:
-        q = select(Attempt)
+        q = select(Attempt).where(Attempt.organization_id == organization_id)
         if quiz_id is not None:
             q = q.where(Attempt.quiz_id == quiz_id)
         if student_id is not None:
@@ -74,6 +75,15 @@ class AttemptRepository(BaseRepository[Attempt]):
         q = q.order_by(Attempt.created_at.desc()).limit(limit).offset(offset)
         result = await self.session.execute(q)
         return list(result.scalars().all())
+
+    async def get_by_id_scoped(self, attempt_id: UUID, organization_id: UUID) -> Attempt | None:
+        result = await self.session.execute(
+            select(Attempt).where(
+                Attempt.id == attempt_id,
+                Attempt.organization_id == organization_id,
+            )
+        )
+        return result.scalar_one_or_none()
 
 
 class AttemptQuestionRepository(BaseRepository[AttemptQuestion]):

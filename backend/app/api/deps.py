@@ -11,7 +11,13 @@ from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.utils.jwt import decode_token
 
-__all__ = ["get_db", "get_current_user", "require_admin", "require_student"]
+__all__ = [
+    "get_db",
+    "get_current_user",
+    "require_admin",
+    "require_student",
+    "require_admin_with_org",
+]
 
 _bearer = HTTPBearer()
 
@@ -59,5 +65,22 @@ async def require_student(current_user: User = Depends(get_current_user)) -> Use
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Student access required",
+        )
+    return current_user
+
+
+async def require_admin_with_org(current_user: User = Depends(require_admin)) -> User:
+    """
+    Admin dependency that additionally guarantees `organization_id` is set.
+
+    Per Phase 9B "Tenant Boundary Rules" #8, every admin must belong to an
+    organization (enforced at creation, not via a DB constraint — students
+    remain the deliberate global exception). Any admin route that scopes
+    data by organization should depend on this rather than `require_admin`.
+    """
+    if current_user.organization_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin account is not assigned to an organization",
         )
     return current_user

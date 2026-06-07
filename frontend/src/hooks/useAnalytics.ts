@@ -22,3 +22,12 @@ export function useStudentHistoryQuery(params: StudentHistoryParams = {}) {
     queryFn: () => analyticsApi.getMeHistory(params),
   });
 }
+
+export const adminDashboardQueryKey = ["analytics", "admin", "dashboard"] as const;
+
+export function useAdminDashboardQuery() {
+  return useQuery({
+    queryKey: adminDashboardQueryKey,
+    queryFn: analyticsApi.getAdminDashboard,
+  });
+}

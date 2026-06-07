@@ -1,7 +1,6 @@
 import {
   Box,
   Card,
-  CardContent,
   Chip,
   Grid,
   List,
@@ -10,63 +9,14 @@ import {
   Paper,
   Typography,
 } from "@mui/material";
-import type { ChipProps } from "@mui/material";
 
 import { EmptyState } from "../../components/common/EmptyState";
 import { ErrorState } from "../../components/common/ErrorState";
 import { LoadingState } from "../../components/common/LoadingState";
+import { StatCard } from "../../components/common/StatCard";
 import { useAuth } from "../../context/AuthContext";
 import { useStudentAnalyticsQuery, useStudentHistoryQuery } from "../../hooks/useAnalytics";
-
-const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
-const scoreFormatter = new Intl.NumberFormat(undefined, {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-function formatScore(value: number | null): string {
-  return value === null ? "—" : scoreFormatter.format(value);
-}
-
-function formatDateTime(value: string | null): string {
-  return value ? dateTimeFormatter.format(new Date(value)) : "—";
-}
-
-const STATUS_COLORS: Record<string, ChipProps["color"]> = {
-  submitted: "success",
-  in_progress: "info",
-  timed_out: "warning",
-  abandoned: "error",
-};
-
-function statusLabel(status: string): string {
-  return status
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-interface StatCardProps {
-  label: string;
-  value: string;
-}
-
-function StatCard({ label, value }: StatCardProps) {
-  return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography variant="body2" color="text.secondary">
-          {label}
-        </Typography>
-        <Typography variant="h4">{value}</Typography>
-      </CardContent>
-    </Card>
-  );
-}
+import { formatDateTime, formatScore, STATUS_COLORS, statusLabel } from "../../utils/attemptFormatting";
 
 export function StudentDashboardPage() {
   const { user } = useAuth();
