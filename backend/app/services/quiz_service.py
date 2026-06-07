@@ -17,6 +17,13 @@ from app.repositories.question_repository import (
 )
 from app.repositories.quiz_repository import QuizRepository
 
+# Phase 9B note: every method below that touches a question bank, question,
+# or quiz takes an `organization_id` (the requesting admin's organization) and
+# resolves resources through organization-scoped repository lookups. A
+# resource that exists but belongs to another organization is treated
+# identically to one that does not exist — `LookupError` (-> 404), never a
+# separate "forbidden" path — per Phase 9B "Tenant Boundary Rules" #3.
+
 
 class QuizService:
     def __init__(self, session: AsyncSession) -> None:
@@ -29,22 +36,33 @@ class QuizService:
     # ── Question Banks ─────────────────────────────────────────────────────
 
     async def create_question_bank(
-        self, creator_id: UUID, name: str, description: str | None = None
+        self,
+        creator_id: UUID,
+        organization_id: UUID,
+        name: str,
+        description: str | None = None,
     ) -> QuestionBank:
-        bank = QuestionBank(name=name, description=description, creator_id=creator_id)
+        bank = QuestionBank(
+            name=name,
+            description=description,
+            creator_id=creator_id,
+            organization_id=organization_id,
+        )
         return await self.bank_repo.create(bank)
 
-    async def list_question_banks(self) -> list[QuestionBank]:
-        return list(await self.bank_repo.get_all(limit=1000))
+    async def list_question_banks(self, organization_id: UUID) -> list[QuestionBank]:
+        return await self.bank_repo.get_by_organization(organization_id)
 
-    async def get_question_bank(self, bank_id: UUID) -> QuestionBank:
-        bank = await self.bank_repo.get_by_id(bank_id)
+    async def get_question_bank(self, bank_id: UUID, organization_id: UUID) -> QuestionBank:
+        bank = await self.bank_repo.get_by_id_scoped(bank_id, organization_id)
         if bank is None:
             raise LookupError("Question bank not found")
         return bank
 
-    async def update_question_bank(self, bank_id: UUID, updates: dict) -> QuestionBank:
-        bank = await self.bank_repo.get_by_id(bank_id)
+    async def update_question_bank(
+        self, bank_id: UUID, organization_id: UUID, updates: dict
+    ) -> QuestionBank:
+        bank = await self.bank_repo.get_by_id_scoped(bank_id, organization_id)
         if bank is None:
             raise LookupError("Question bank not found")
         for field, value in updates.items():
@@ -53,8 +71,8 @@ class QuizService:
         await self.session.refresh(bank)
         return bank
 
-    async def delete_question_bank(self, bank_id: UUID) -> None:
-        bank = await self.bank_repo.get_by_id(bank_id)
+    async def delete_question_bank(self, bank_id: UUID, organization_id: UUID) -> None:
+        bank = await self.bank_repo.get_by_id_scoped(bank_id, organization_id)
         if bank is None:
             raise LookupError("Question bank not found")
         try:
@@ -70,6 +88,7 @@ class QuizService:
     async def create_question(
         self,
         bank_id: UUID,
+        organization_id: UUID,
         text: str,
         marks: int,
         options: list,
@@ -77,7 +96,7 @@ class QuizService:
         negative_marks: Decimal = Decimal("0.00"),
         explanation: str | None = None,
     ) -> Question:
-        bank = await self.bank_repo.get_by_id(bank_id)
+        bank = await self.bank_repo.get_by_id_scoped(bank_id, organization_id)
         if bank is None:
             raise LookupError("Question bank not found")
 
@@ -103,22 +122,26 @@ class QuizService:
 
         return await self.question_repo.get_with_options(question.id)  # type: ignore[return-value]
 
-    async def list_questions_in_bank(self, bank_id: UUID) -> list[Question]:
-        bank = await self.bank_repo.get_by_id(bank_id)
+    async def list_questions_in_bank(self, bank_id: UUID, organization_id: UUID) -> list[Question]:
+        bank = await self.bank_repo.get_by_id_scoped(bank_id, organization_id)
         if bank is None:
             raise LookupError("Question bank not found")
         return await self.question_repo.get_by_bank_with_options(bank_id)
 
-    async def get_question(self, question_id: UUID) -> Question:
-        question = await self.question_repo.get_with_options(question_id)
+    async def get_question(self, question_id: UUID, organization_id: UUID) -> Question:
+        question = await self.question_repo.get_with_options_scoped(question_id, organization_id)
         if question is None:
             raise LookupError("Question not found")
         return question
 
     async def update_question(
-        self, question_id: UUID, updates: dict, options: list | None = None
+        self,
+        question_id: UUID,
+        organization_id: UUID,
+        updates: dict,
+        options: list | None = None,
     ) -> Question:
-        question = await self.question_repo.get_with_options(question_id)
+        question = await self.question_repo.get_with_options_scoped(question_id, organization_id)
         if question is None:
             raise LookupError("Question not found")
 
@@ -142,8 +165,8 @@ class QuizService:
         await self.session.flush()
         return await self.question_repo.get_with_options(question_id)  # type: ignore[return-value]
 
-    async def delete_question(self, question_id: UUID) -> None:
-        question = await self.question_repo.get_by_id(question_id)
+    async def delete_question(self, question_id: UUID, organization_id: UUID) -> None:
+        question = await self.question_repo.get_with_options_scoped(question_id, organization_id)
         if question is None:
             raise LookupError("Question not found")
         try:
@@ -156,9 +179,10 @@ class QuizService:
 
     # ── Quizzes ────────────────────────────────────────────────────────────
 
-    async def create_quiz(self, creator_id: UUID, title: str, **kwargs) -> Quiz:
+    async def create_quiz(self, creator_id: UUID, organization_id: UUID, title: str, **kwargs) -> Quiz:
         quiz = Quiz(
             creator_id=creator_id,
+            organization_id=organization_id,
             title=title,
             duration_minutes=kwargs.get("duration_minutes", 60),
             description=kwargs.get("description"),
@@ -172,20 +196,22 @@ class QuizService:
         )
         return await self.quiz_repo.create(quiz)
 
-    async def list_quizzes(self) -> list[Quiz]:
-        return list(await self.quiz_repo.get_all(limit=1000))
+    async def list_quizzes(self, organization_id: UUID) -> list[Quiz]:
+        return await self.quiz_repo.get_by_organization(organization_id)
 
     async def list_available_quizzes_for_student(self) -> list[Quiz]:
+        # Students are global (Phase 9B "Tenant Boundary Rules" #7) — they may
+        # discover and attempt published quizzes from any organization.
         return await self.quiz_repo.get_available_for_student(datetime.now(timezone.utc))
 
-    async def get_quiz(self, quiz_id: UUID) -> Quiz:
-        quiz = await self.quiz_repo.get_by_id(quiz_id)
+    async def get_quiz(self, quiz_id: UUID, organization_id: UUID) -> Quiz:
+        quiz = await self.quiz_repo.get_by_id_scoped(quiz_id, organization_id)
         if quiz is None:
             raise LookupError("Quiz not found")
         return quiz
 
-    async def update_quiz(self, quiz_id: UUID, updates: dict) -> Quiz:
-        quiz = await self.quiz_repo.get_by_id(quiz_id)
+    async def update_quiz(self, quiz_id: UUID, organization_id: UUID, updates: dict) -> Quiz:
+        quiz = await self.quiz_repo.get_by_id_scoped(quiz_id, organization_id)
         if quiz is None:
             raise LookupError("Quiz not found")
         for field, value in updates.items():
@@ -196,8 +222,8 @@ class QuizService:
 
     # ── Publish / Unpublish ────────────────────────────────────────────────
 
-    async def publish_quiz(self, quiz_id: UUID, requester_id: UUID) -> Quiz:
-        quiz = await self.quiz_repo.get_by_id(quiz_id)
+    async def publish_quiz(self, quiz_id: UUID, organization_id: UUID, requester_id: UUID) -> Quiz:
+        quiz = await self.quiz_repo.get_by_id_scoped(quiz_id, organization_id)
         if quiz is None:
             raise LookupError("Quiz not found")
         assigned = await self.quiz_repo.get_quiz_questions_ordered(quiz_id)
@@ -208,8 +234,8 @@ class QuizService:
         await self.session.refresh(quiz)
         return quiz
 
-    async def unpublish_quiz(self, quiz_id: UUID, requester_id: UUID) -> Quiz:
-        quiz = await self.quiz_repo.get_by_id(quiz_id)
+    async def unpublish_quiz(self, quiz_id: UUID, organization_id: UUID, requester_id: UUID) -> Quiz:
+        quiz = await self.quiz_repo.get_by_id_scoped(quiz_id, organization_id)
         if quiz is None:
             raise LookupError("Quiz not found")
         quiz.is_published = False
@@ -222,16 +248,20 @@ class QuizService:
     async def add_question_to_quiz(
         self,
         quiz_id: UUID,
+        organization_id: UUID,
         question_id: UUID,
         position: int,
         requester_id: UUID,
         marks_override: Decimal | None = None,
     ) -> QuizQuestion:
-        quiz = await self.quiz_repo.get_by_id(quiz_id)
+        quiz = await self.quiz_repo.get_by_id_scoped(quiz_id, organization_id)
         if quiz is None:
             raise LookupError("Quiz not found")
 
-        question = await self.question_repo.get_by_id(question_id)
+        # A quiz may only reference questions whose bank belongs to the same
+        # organization — cross-tenant references are never created
+        # (Phase 9B "Tenant Boundary Rules" #5).
+        question = await self.question_repo.get_with_options_scoped(question_id, organization_id)
         if question is None:
             raise LookupError("Question not found")
 
@@ -251,15 +281,15 @@ class QuizService:
         return next(r for r in rows if r.question_id == question_id)
 
     async def remove_question_from_quiz(
-        self, quiz_id: UUID, question_id: UUID, requester_id: UUID
+        self, quiz_id: UUID, organization_id: UUID, question_id: UUID, requester_id: UUID
     ) -> None:
-        quiz = await self.quiz_repo.get_by_id(quiz_id)
+        quiz = await self.quiz_repo.get_by_id_scoped(quiz_id, organization_id)
         if quiz is None:
             raise LookupError("Quiz not found")
         await self.quiz_repo.remove_question(quiz_id, question_id)
 
-    async def list_quiz_questions(self, quiz_id: UUID) -> list[QuizQuestion]:
-        quiz = await self.quiz_repo.get_by_id(quiz_id)
+    async def list_quiz_questions(self, quiz_id: UUID, organization_id: UUID) -> list[QuizQuestion]:
+        quiz = await self.quiz_repo.get_by_id_scoped(quiz_id, organization_id)
         if quiz is None:
             raise LookupError("Quiz not found")
         return await self.quiz_repo.get_quiz_questions_with_details(quiz_id)

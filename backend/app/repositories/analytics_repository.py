@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.attempt import Attempt
 from app.models.attempt_answer import AttemptAnswer
 from app.models.attempt_question import AttemptQuestion
-from app.models.enums import AttemptStatus, ProctoringEventType
+from app.models.enums import AttemptStatus, ProctoringEventType, UserRole
 from app.models.proctoring_event import ProctoringEvent
 from app.models.quiz import Quiz
 from app.models.user import User
@@ -82,7 +82,7 @@ class AnalyticsRepository:
 
     # ── Quiz ──────────────────────────────────────────────────────────────────
 
-    async def get_quiz_stats(self, quiz_id: UUID):
+    async def get_quiz_stats(self, quiz_id: UUID, organization_id: UUID):
         result = await self.session.execute(
             select(
                 func.count(Attempt.id).label("total_attempts"),
@@ -101,16 +101,16 @@ class AnalyticsRepository:
                 func.avg(Attempt.score).filter(
                     Attempt.status.in_([AttemptStatus.SUBMITTED, AttemptStatus.TIMED_OUT])
                 ).label("average_score"),
-            ).where(Attempt.quiz_id == quiz_id)
+            ).where(Attempt.quiz_id == quiz_id, Attempt.organization_id == organization_id)
         )
         return result.mappings().one()
 
-    async def get_quiz_anti_cheat_stats(self, quiz_id: UUID) -> dict:
+    async def get_quiz_anti_cheat_stats(self, quiz_id: UUID, organization_id: UUID) -> dict:
         ts_result = await self.session.execute(
             select(
                 func.coalesce(func.sum(Attempt.tab_switch_count), 0).label("total_tab_switches"),
                 func.avg(Attempt.tab_switch_count).label("avg_tab_switches"),
-            ).where(Attempt.quiz_id == quiz_id)
+            ).where(Attempt.quiz_id == quiz_id, Attempt.organization_id == organization_id)
         )
         ts_row = ts_result.mappings().one()
 
@@ -120,7 +120,7 @@ class AnalyticsRepository:
             )
             .select_from(ProctoringEvent)
             .join(Attempt, Attempt.id == ProctoringEvent.attempt_id)
-            .where(Attempt.quiz_id == quiz_id)
+            .where(Attempt.quiz_id == quiz_id, Attempt.organization_id == organization_id)
         )
         pe_row = pe_result.mappings().one()
 
@@ -130,11 +130,11 @@ class AnalyticsRepository:
             "attempts_with_proctoring_events": pe_row["attempts_with_events"],
         }
 
-    async def get_quiz_most_common_event(self, quiz_id: UUID) -> str | None:
+    async def get_quiz_most_common_event(self, quiz_id: UUID, organization_id: UUID) -> str | None:
         result = await self.session.execute(
             select(ProctoringEvent.event_type)
             .join(Attempt, Attempt.id == ProctoringEvent.attempt_id)
-            .where(Attempt.quiz_id == quiz_id)
+            .where(Attempt.quiz_id == quiz_id, Attempt.organization_id == organization_id)
             .group_by(ProctoringEvent.event_type)
             .order_by(func.count(ProctoringEvent.id).desc())
             .limit(1)
@@ -145,7 +145,7 @@ class AnalyticsRepository:
         # row is a ProctoringEventType enum; return its string value
         return row.value if isinstance(row, ProctoringEventType) else str(row)
 
-    async def get_quiz_question_stats(self, quiz_id: UUID) -> list:
+    async def get_quiz_question_stats(self, quiz_id: UUID, organization_id: UUID) -> list:
         result = await self.session.execute(
             select(
                 AttemptQuestion.question_id,
@@ -168,31 +168,54 @@ class AnalyticsRepository:
             .outerjoin(AttemptAnswer, AttemptAnswer.attempt_question_id == AttemptQuestion.id)
             .where(
                 Attempt.quiz_id == quiz_id,
+                Attempt.organization_id == organization_id,
                 Attempt.status.in_([AttemptStatus.SUBMITTED, AttemptStatus.TIMED_OUT]),
             )
             .group_by(AttemptQuestion.question_id)
         )
         return list(result.mappings().all())
 
-    # ── Admin ─────────────────────────────────────────────────────────────────
+    # ── Admin (organization-scoped) ───────────────────────────────────────────
+    #
+    # These queries back the admin dashboard. Per Phase 9B "Tenant Boundary
+    # Rules" #10, they are scoped to the requesting admin's organization —
+    # there is no platform-wide ("all organizations") aggregate exposed to
+    # regular admins. Students are global (no organization_id), so "students
+    # belonging to" an organization is defined as "students who have attempted
+    # at least one of that organization's quizzes."
 
-    async def get_platform_stats(self):
-        result = await self.session.execute(
+    async def get_org_stats(self, organization_id: UUID):
+        admin_result = await self.session.execute(
             select(
-                select(func.count(User.id)).scalar_subquery().label("total_users"),
-                select(func.count(User.id)).where(
-                    User.role == "student"
-                ).scalar_subquery().label("total_students"),
-                select(func.count(User.id)).where(
-                    User.role == "admin"
-                ).scalar_subquery().label("total_admins"),
-                select(func.count(User.id)).where(
+                func.count(User.id).label("total_admins"),
+                func.count(User.id).filter(User.is_active.is_(True)).label("active_admins"),
+            ).where(User.role == UserRole.ADMIN, User.organization_id == organization_id)
+        )
+        admin_row = admin_result.mappings().one()
+
+        student_result = await self.session.execute(
+            select(
+                func.count(func.distinct(Attempt.student_id)).label("total_students"),
+                func.count(func.distinct(Attempt.student_id)).filter(
                     User.is_active.is_(True)
-                ).scalar_subquery().label("active_users"),
-                select(func.count(Quiz.id)).scalar_subquery().label("total_quizzes"),
-                select(func.count(Quiz.id)).where(
-                    Quiz.is_published.is_(True)
-                ).scalar_subquery().label("published_quizzes"),
+                ).label("active_students"),
+            )
+            .select_from(Attempt)
+            .join(User, User.id == Attempt.student_id)
+            .where(Attempt.organization_id == organization_id)
+        )
+        student_row = student_result.mappings().one()
+
+        quiz_result = await self.session.execute(
+            select(
+                func.count(Quiz.id).label("total_quizzes"),
+                func.count(Quiz.id).filter(Quiz.is_published.is_(True)).label("published_quizzes"),
+            ).where(Quiz.organization_id == organization_id)
+        )
+        quiz_row = quiz_result.mappings().one()
+
+        attempt_result = await self.session.execute(
+            select(
                 func.count(Attempt.id).label("total_attempts"),
                 func.count(Attempt.id).filter(
                     Attempt.status == AttemptStatus.IN_PROGRESS
@@ -206,21 +229,43 @@ class AnalyticsRepository:
                 func.count(Attempt.id).filter(
                     Attempt.status == AttemptStatus.ABANDONED
                 ).label("abandoned_attempts"),
-                func.coalesce(func.sum(Attempt.tab_switch_count), 0).label(
-                    "total_tab_switches"
-                ),
+                func.coalesce(func.sum(Attempt.tab_switch_count), 0).label("total_tab_switches"),
                 func.avg(Attempt.tab_switch_count).label("avg_tab_switches"),
-            ).select_from(Attempt)
+            ).where(Attempt.organization_id == organization_id)
         )
-        return result.mappings().one()
+        attempt_row = attempt_result.mappings().one()
 
-    async def get_platform_total_proctoring_events(self) -> int:
+        total_admins = admin_row["total_admins"]
+        total_students = student_row["total_students"]
+        active_admins = admin_row["active_admins"]
+        active_students = student_row["active_students"]
+
+        return {
+            "total_users": total_admins + total_students,
+            "total_students": total_students,
+            "total_admins": total_admins,
+            "active_users": active_admins + active_students,
+            "total_quizzes": quiz_row["total_quizzes"],
+            "published_quizzes": quiz_row["published_quizzes"],
+            "total_attempts": attempt_row["total_attempts"],
+            "in_progress_attempts": attempt_row["in_progress_attempts"],
+            "submitted_attempts": attempt_row["submitted_attempts"],
+            "timed_out_attempts": attempt_row["timed_out_attempts"],
+            "abandoned_attempts": attempt_row["abandoned_attempts"],
+            "total_tab_switches": attempt_row["total_tab_switches"],
+            "avg_tab_switches": attempt_row["avg_tab_switches"],
+        }
+
+    async def get_org_total_proctoring_events(self, organization_id: UUID) -> int:
         result = await self.session.execute(
             select(func.count(ProctoringEvent.id))
+            .select_from(ProctoringEvent)
+            .join(Attempt, Attempt.id == ProctoringEvent.attempt_id)
+            .where(Attempt.organization_id == organization_id)
         )
         return result.scalar_one()
 
-    async def get_recent_activity(self, limit: int = 10) -> list:
+    async def get_recent_activity(self, organization_id: UUID, limit: int = 10) -> list:
         result = await self.session.execute(
             select(
                 Attempt.id.label("attempt_id"),
@@ -235,6 +280,7 @@ class AnalyticsRepository:
             )
             .join(User, User.id == Attempt.student_id)
             .join(Quiz, Quiz.id == Attempt.quiz_id)
+            .where(Attempt.organization_id == organization_id)
             .order_by(Attempt.started_at.desc())
             .limit(limit)
         )

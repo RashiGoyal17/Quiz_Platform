@@ -38,6 +38,24 @@ class TestRegister:
 
         with pytest.raises(ValueError, match="Email already registered"):
             await svc.register(
+                name="Jane Doe",
+                email="jane@example.com",
+                password="StrongPass123!",
+                role=UserRole.STUDENT,
+            )
+
+    async def test_register_admin_role_rejected(self):
+        """
+        Phase 9B: self-service registration is student-only — admin accounts
+        must belong to an organization, and provisioning them remains an
+        internal operational process (see Tenant Boundary Rules #8).
+        """
+        session = AsyncMock()
+        svc = _make_service(session)
+        svc.user_repo.email_exists = AsyncMock(return_value=False)
+
+        with pytest.raises(ValueError, match="Self-service registration is only available for students"):
+            await svc.register(
                 name="Admin User",
                 email="admin@test.com",
                 password="StrongPass123!",

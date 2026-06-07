@@ -119,14 +119,14 @@ class AnalyticsService:
 
     # ── Quiz ──────────────────────────────────────────────────────────────────
 
-    async def get_quiz_analytics(self, quiz_id: UUID) -> QuizAnalyticsResponse:
-        quiz = await self.quiz_repo.get_by_id(quiz_id)
+    async def get_quiz_analytics(self, quiz_id: UUID, organization_id: UUID) -> QuizAnalyticsResponse:
+        quiz = await self.quiz_repo.get_by_id_scoped(quiz_id, organization_id)
         if quiz is None:
             raise LookupError("Quiz not found")
 
-        stats = await self.analytics_repo.get_quiz_stats(quiz_id)
-        anti_cheat = await self.analytics_repo.get_quiz_anti_cheat_stats(quiz_id)
-        most_common = await self.analytics_repo.get_quiz_most_common_event(quiz_id)
+        stats = await self.analytics_repo.get_quiz_stats(quiz_id, organization_id)
+        anti_cheat = await self.analytics_repo.get_quiz_anti_cheat_stats(quiz_id, organization_id)
+        most_common = await self.analytics_repo.get_quiz_most_common_event(quiz_id, organization_id)
 
         submitted = int(stats["submitted_count"])
         timed_out = int(stats["timed_out_count"])
@@ -158,12 +158,14 @@ class AnalyticsService:
             ),
         )
 
-    async def get_quiz_question_analytics(self, quiz_id: UUID) -> QuizQuestionAnalyticsResponse:
-        quiz = await self.quiz_repo.get_by_id(quiz_id)
+    async def get_quiz_question_analytics(
+        self, quiz_id: UUID, organization_id: UUID
+    ) -> QuizQuestionAnalyticsResponse:
+        quiz = await self.quiz_repo.get_by_id_scoped(quiz_id, organization_id)
         if quiz is None:
             raise LookupError("Quiz not found")
 
-        rows = await self.analytics_repo.get_quiz_question_stats(quiz_id)
+        rows = await self.analytics_repo.get_quiz_question_stats(quiz_id, organization_id)
 
         rankable = [r for r in rows if int(r["total_seen"]) >= MIN_ATTEMPTS_FOR_RANKING]
         insufficient = [r for r in rows if int(r["total_seen"]) < MIN_ATTEMPTS_FOR_RANKING]
@@ -196,12 +198,12 @@ class AnalyticsService:
 
     # ── Admin ──────────────────────────────────────────────────────────────────
 
-    async def get_admin_dashboard(self) -> AdminDashboardResponse:
-        platform = await self.analytics_repo.get_platform_stats()
-        total_events = await self.analytics_repo.get_platform_total_proctoring_events()
-        recent_rows = await self.analytics_repo.get_recent_activity(limit=10)
+    async def get_admin_dashboard(self, organization_id: UUID) -> AdminDashboardResponse:
+        org = await self.analytics_repo.get_org_stats(organization_id)
+        total_events = await self.analytics_repo.get_org_total_proctoring_events(organization_id)
+        recent_rows = await self.analytics_repo.get_recent_activity(organization_id, limit=10)
 
-        avg_ts = platform["avg_tab_switches"]
+        avg_ts = org["avg_tab_switches"]
 
         recent = [
             RecentActivityItem(
@@ -219,18 +221,18 @@ class AnalyticsService:
         ]
 
         return AdminDashboardResponse(
-            total_users=int(platform["total_users"]),
-            total_students=int(platform["total_students"]),
-            total_admins=int(platform["total_admins"]),
-            active_users=int(platform["active_users"]),
-            total_quizzes=int(platform["total_quizzes"]),
-            published_quizzes=int(platform["published_quizzes"]),
-            total_attempts=int(platform["total_attempts"]),
-            in_progress_attempts=int(platform["in_progress_attempts"]),
-            submitted_attempts=int(platform["submitted_attempts"]),
-            timed_out_attempts=int(platform["timed_out_attempts"]),
-            abandoned_attempts=int(platform["abandoned_attempts"]),
-            total_tab_switches=int(platform["total_tab_switches"]),
+            total_users=int(org["total_users"]),
+            total_students=int(org["total_students"]),
+            total_admins=int(org["total_admins"]),
+            active_users=int(org["active_users"]),
+            total_quizzes=int(org["total_quizzes"]),
+            published_quizzes=int(org["published_quizzes"]),
+            total_attempts=int(org["total_attempts"]),
+            in_progress_attempts=int(org["in_progress_attempts"]),
+            submitted_attempts=int(org["submitted_attempts"]),
+            timed_out_attempts=int(org["timed_out_attempts"]),
+            abandoned_attempts=int(org["abandoned_attempts"]),
+            total_tab_switches=int(org["total_tab_switches"]),
             average_tab_switches_per_attempt=(
                 Decimal(str(avg_ts)).quantize(_TWO_PLACES) if avg_ts is not None else None
             ),

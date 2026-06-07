@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_admin
+from app.api.deps import require_admin_with_org
 from app.database import get_db
 from app.models.user import User
 from app.schemas.quiz import QuestionResponse, QuestionUpdate
@@ -30,10 +30,10 @@ def _handle(exc: Exception) -> None:
 async def get_question(
     question_id: uuid.UUID,
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuestionResponse:
     try:
-        question = await svc.get_question(question_id)
+        question = await svc.get_question(question_id, admin.organization_id)
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return QuestionResponse.model_validate(question)
@@ -48,12 +48,12 @@ async def update_question(
     question_id: uuid.UUID,
     body: QuestionUpdate,
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuestionResponse:
     options = body.options if "options" in body.model_fields_set else None
     updates = body.model_dump(exclude_unset=True, exclude={"options"})
     try:
-        question = await svc.update_question(question_id, updates, options)
+        question = await svc.update_question(question_id, admin.organization_id, updates, options)
     except (LookupError, ValueError) as e:
         _handle(e)
     return QuestionResponse.model_validate(question)
@@ -67,9 +67,9 @@ async def update_question(
 async def delete_question(
     question_id: uuid.UUID,
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> None:
     try:
-        await svc.delete_question(question_id)
+        await svc.delete_question(question_id, admin.organization_id)
     except (LookupError, ValueError) as e:
         _handle(e)

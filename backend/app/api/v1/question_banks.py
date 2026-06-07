@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_admin
+from app.api.deps import require_admin_with_org
 from app.database import get_db
 from app.models.user import User
 from app.schemas.quiz import (
@@ -39,10 +39,11 @@ def _handle(exc: Exception, not_found_msg: str | None = None) -> None:
 async def create_question_bank(
     body: QuestionBankCreate,
     svc: QuizService = Depends(_svc),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuestionBankResponse:
     bank = await svc.create_question_bank(
         creator_id=admin.id,
+        organization_id=admin.organization_id,
         name=body.name,
         description=body.description,
     )
@@ -56,9 +57,9 @@ async def create_question_bank(
 )
 async def list_question_banks(
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> list[QuestionBankResponse]:
-    banks = await svc.list_question_banks()
+    banks = await svc.list_question_banks(admin.organization_id)
     return [QuestionBankResponse.model_validate(b) for b in banks]
 
 
@@ -70,10 +71,10 @@ async def list_question_banks(
 async def get_question_bank(
     bank_id: uuid.UUID,
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuestionBankResponse:
     try:
-        bank = await svc.get_question_bank(bank_id)
+        bank = await svc.get_question_bank(bank_id, admin.organization_id)
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return QuestionBankResponse.model_validate(bank)
@@ -88,11 +89,11 @@ async def update_question_bank(
     bank_id: uuid.UUID,
     body: QuestionBankUpdate,
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuestionBankResponse:
     updates = body.model_dump(exclude_unset=True)
     try:
-        bank = await svc.update_question_bank(bank_id, updates)
+        bank = await svc.update_question_bank(bank_id, admin.organization_id, updates)
     except (LookupError, ValueError) as e:
         _handle(e)
     return QuestionBankResponse.model_validate(bank)
@@ -106,10 +107,10 @@ async def update_question_bank(
 async def delete_question_bank(
     bank_id: uuid.UUID,
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> None:
     try:
-        await svc.delete_question_bank(bank_id)
+        await svc.delete_question_bank(bank_id, admin.organization_id)
     except (LookupError, ValueError) as e:
         _handle(e)
 
@@ -126,11 +127,12 @@ async def create_question(
     bank_id: uuid.UUID,
     body: QuestionCreate,
     svc: QuizService = Depends(_svc),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuestionResponse:
     try:
         question = await svc.create_question(
             bank_id=bank_id,
+            organization_id=admin.organization_id,
             text=body.text,
             marks=body.marks,
             negative_marks=body.negative_marks,
@@ -151,10 +153,10 @@ async def create_question(
 async def list_questions(
     bank_id: uuid.UUID,
     svc: QuizService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> list[QuestionResponse]:
     try:
-        questions = await svc.list_questions_in_bank(bank_id)
+        questions = await svc.list_questions_in_bank(bank_id, admin.organization_id)
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return [QuestionResponse.model_validate(q) for q in questions]

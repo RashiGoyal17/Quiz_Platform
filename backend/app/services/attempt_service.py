@@ -243,10 +243,12 @@ class AttemptService:
                 f"Attempt limit reached ({quiz.max_attempts}). No more attempts allowed."
             )
 
-        # Create attempt
+        # Create attempt — organization_id is denormalized from the quiz at
+        # creation time (Phase 9B: attempts belong to the org that owns the quiz).
         attempt = Attempt(
             student_id=student_id,
             quiz_id=quiz_id,
+            organization_id=quiz.organization_id,
             attempt_number=prior_count + 1,
             status=AttemptStatus.IN_PROGRESS,
             ip_address=ip_address,
@@ -483,6 +485,7 @@ class AttemptService:
 
     async def list_attempts_admin(
         self,
+        organization_id: UUID,
         quiz_id: UUID | None = None,
         student_id: UUID | None = None,
         status: AttemptStatus | None = None,
@@ -490,6 +493,7 @@ class AttemptService:
         offset: int = 0,
     ) -> list[Attempt]:
         return await self.attempt_repo.get_all_filtered(
+            organization_id=organization_id,
             quiz_id=quiz_id,
             student_id=student_id,
             status=status,
@@ -537,9 +541,9 @@ class AttemptService:
         event = await self.proctoring_event_repo.create(event)
         return ProctoringEventResponse.model_validate(event)
 
-    async def get_attempt_audit(self, attempt_id: UUID) -> AttemptAuditResponse:
+    async def get_attempt_audit(self, attempt_id: UUID, organization_id: UUID) -> AttemptAuditResponse:
         """Return full audit trail: attempt metadata, tab switch log, and proctoring events."""
-        attempt = await self.attempt_repo.get_by_id(attempt_id)
+        attempt = await self.attempt_repo.get_by_id_scoped(attempt_id, organization_id)
         if attempt is None:
             raise LookupError("Attempt not found")
 

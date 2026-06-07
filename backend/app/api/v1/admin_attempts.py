@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_admin
+from app.api.deps import require_admin_with_org
 from app.database import get_db
 from app.models.enums import AttemptStatus
 from app.models.user import User
@@ -34,9 +34,10 @@ async def list_attempts(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     svc: AttemptService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> list[AttemptAdminResponse]:
     attempts = await svc.list_attempts_admin(
+        organization_id=admin.organization_id,
         quiz_id=quiz_id,
         student_id=student_id,
         status=attempt_status,
@@ -58,9 +59,9 @@ async def list_attempts(
 async def get_attempt_audit(
     attempt_id: uuid.UUID,
     svc: AttemptService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> AttemptAuditResponse:
     try:
-        return await svc.get_attempt_audit(attempt_id)
+        return await svc.get_attempt_audit(attempt_id, admin.organization_id)
     except LookupError as exc:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(exc))
