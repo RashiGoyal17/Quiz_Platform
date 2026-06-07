@@ -21,7 +21,7 @@ export function Navbar({ title, onMenuClick }: NavbarProps) {
 
   return (
     <AppBar position="static" color="primary" elevation={1}>
-      <Toolbar sx={{ gap: 2 }}>
+      <Toolbar sx={{ gap: 2, pl: 6 }}>
         {onMenuClick && (
           <IconButton
             color="inherit"

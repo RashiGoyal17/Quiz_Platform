@@ -1,0 +1,20 @@
+{
+  "admins": [
+    {
+      "name": "Jane Doe",
+      "email": "jane@example.com",
+      "password": "Str0ng!Pass"
+    },
+    {
+      "name": "John Smith",
+      "email": "john@example.com",
+      "password": "An0ther!Pass"
+    },
+        {
+      "name": "ru",
+      "email": "ru@example.com",
+      "password": "An0ther!Pass"
+    }
+  ],
+  "organization_id": "00000000-0000-0000-0000-000000000001"
+}

@@ -11,14 +11,14 @@ export function StudentLayout() {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <Navbar title="Quiz Platform — Student" onMenuClick={sidebar.openMobile} />
-      <Box sx={{ display: "flex", flex: 1 }}>
+      <Box sx={{ display: "flex", flex: 1, gap: 2 }}>
         <StudentSidebar
           mobileOpen={sidebar.mobileOpen}
           onMobileClose={sidebar.closeMobile}
           collapsed={sidebar.collapsed}
           onToggleCollapsed={sidebar.toggleCollapsed}
         />
-        <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
+        <Container maxWidth="lg" sx={{ py: 4, flex: 1, bgcolor: "background.paper" }}>
           <Outlet />
         </Container>
       </Box>
