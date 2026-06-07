@@ -1,12 +1,14 @@
 import uuid
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin_with_org
 from app.database import get_db
 from app.models.user import User
 from app.schemas.quiz import (
+    BulkImportResponse,
     QuestionBankCreate,
     QuestionBankResponse,
     QuestionBankUpdate,
@@ -160,3 +162,33 @@ async def list_questions(
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return [QuestionResponse.model_validate(q) for q in questions]
+
+
+@router.post(
+    "/{bank_id}/import",
+    response_model=BulkImportResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Bulk import questions into a question bank from a CSV or JSON file",
+)
+async def import_questions(
+    bank_id: uuid.UUID,
+    file: UploadFile = File(..., description="CSV or JSON file containing questions"),
+    format: Literal["csv", "json"] = Form(..., description="File format: 'csv' or 'json'"),
+    svc: QuizService = Depends(_svc),
+    admin: User = Depends(require_admin_with_org),
+) -> BulkImportResponse:
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty")
+    try:
+        result = await svc.bulk_import_questions(
+            bank_id=bank_id,
+            organization_id=admin.organization_id,
+            file_content=content,
+            fmt=format,
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValueError, UnicodeDecodeError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return result

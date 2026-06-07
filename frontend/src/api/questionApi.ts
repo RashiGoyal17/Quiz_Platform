@@ -1,6 +1,13 @@
 import { apiClient } from "./axiosClient";
 import { ENDPOINTS } from "./endpoints";
-import type { QuestionCreateRequest, QuestionRecord, QuestionUpdateRequest } from "./types";
+import type {
+  BulkImportResponse,
+  QuestionCreateRequest,
+  QuestionRecord,
+  QuestionUpdateRequest,
+} from "./types";
+
+export type ImportFormat = "csv" | "json";
 
 export const questionApi = {
   async listByBank(bankId: string): Promise<QuestionRecord[]> {
@@ -25,5 +32,20 @@ export const questionApi = {
 
   async remove(id: string): Promise<void> {
     await apiClient.delete(ENDPOINTS.questions.delete(id));
+  },
+
+  async importFromFile(
+    bankId: string,
+    file: File,
+    format: ImportFormat,
+  ): Promise<BulkImportResponse> {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("format", format);
+    const { data } = await apiClient.post<BulkImportResponse>(
+      ENDPOINTS.questions.import(bankId),
+      form,
+    );
+    return data;
   },
 };

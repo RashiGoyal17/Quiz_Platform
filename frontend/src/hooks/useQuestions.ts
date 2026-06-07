@@ -1,7 +1,8 @@
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 
-import { questionApi } from "../api/questionApi";
+import { questionApi, type ImportFormat } from "../api/questionApi";
 import type {
+  BulkImportResponse,
   Question,
   QuestionCreateRequest,
   QuestionRecord,
@@ -103,6 +104,23 @@ export function useDeleteQuestionMutation() {
     mutationFn: (id: string) => questionApi.remove(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: questionsQueryKey });
+    },
+  });
+}
+
+export function useImportQuestionsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    BulkImportResponse,
+    Error,
+    { bankId: string; file: File; format: ImportFormat }
+  >({
+    mutationFn: ({ bankId, file, format }) =>
+      questionApi.importFromFile(bankId, file, format),
+    onSuccess: (data) => {
+      if (data.imported > 0) {
+        queryClient.invalidateQueries({ queryKey: questionsQueryKey });
+      }
     },
   });
 }
