@@ -384,3 +384,15 @@ export interface ProctoringEventResponse {
   occurred_at: string;
   metadata: Record<string, unknown> | null;
 }
+
+export interface BulkImportRowError {
+  row: number;
+  field: string | null;
+  message: string;
+}
+
+export interface BulkImportResponse {
+  imported: number;
+  failed: number;
+  errors: BulkImportRowError[];
+}

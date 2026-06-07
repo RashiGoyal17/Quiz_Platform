@@ -16,6 +16,7 @@ export const ENDPOINTS = {
   questions: {
     listByBank: (bankId: string) => `/question-banks/${bankId}/questions`,
     create: (bankId: string) => `/question-banks/${bankId}/questions`,
+    import: (bankId: string) => `/question-banks/${bankId}/import`,
     detail: (id: string) => `/questions/${id}`,
     update: (id: string) => `/questions/${id}`,
     delete: (id: string) => `/questions/${id}`,

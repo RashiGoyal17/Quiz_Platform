@@ -2,10 +2,12 @@ import { useMemo, useState } from "react";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { Box, Button, IconButton, Stack, Tooltip, Typography } from "@mui/material";
 import { DataGrid, type GridColDef } from "@mui/x-data-grid";
 
 import { DeleteQuestionDialog } from "../../components/admin/DeleteQuestionDialog";
+import { ImportQuestionsDialog } from "../../components/admin/ImportQuestionsDialog";
 import {
   QuestionFormDialog,
   type QuestionFormMode,
@@ -15,11 +17,13 @@ import { EmptyState } from "../../components/common/EmptyState";
 import { ErrorState } from "../../components/common/ErrorState";
 import { LoadingState } from "../../components/common/LoadingState";
 import type { Question } from "../../api/types";
+import type { ImportFormat } from "../../api/questionApi";
 import { useQuestionBanksQuery } from "../../hooks/useQuestionBanks";
 import {
   useAllQuestionsQuery,
   useCreateQuestionMutation,
   useDeleteQuestionMutation,
+  useImportQuestionsMutation,
   useUpdateQuestionMutation,
 } from "../../hooks/useQuestions";
 
@@ -27,6 +31,7 @@ type DialogState =
   | { kind: "create" }
   | { kind: "edit"; question: Question }
   | { kind: "delete"; question: Question }
+  | { kind: "import" }
   | null;
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
@@ -46,6 +51,7 @@ export function QuestionsPage() {
   const createMutation = useCreateQuestionMutation();
   const updateMutation = useUpdateQuestionMutation();
   const deleteMutation = useDeleteQuestionMutation();
+  const importMutation = useImportQuestionsMutation();
 
   const banks = banksQuery.data ?? [];
 
@@ -54,6 +60,7 @@ export function QuestionsPage() {
     createMutation.reset();
     updateMutation.reset();
     deleteMutation.reset();
+    importMutation.reset();
   };
 
   const handleFormSubmit = (values: QuestionFormSubmitValues) => {
@@ -79,6 +86,10 @@ export function QuestionsPage() {
     if (dialog?.kind === "delete") {
       deleteMutation.mutate(dialog.question.id, { onSuccess: () => closeDialog() });
     }
+  };
+
+  const handleImportSubmit = (bankId: string, file: File, format: ImportFormat) => {
+    importMutation.mutate({ bankId, file, format });
   };
 
   const columns = useMemo<GridColDef<Question>[]>(
@@ -152,18 +163,32 @@ export function QuestionsPage() {
         sx={{ alignItems: "center", justifyContent: "space-between" }}
       >
         <Typography variant="h4">Questions</Typography>
-        <Tooltip title={canCreate ? "" : "Create a question bank first"}>
-          <span>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              disabled={!canCreate}
-              onClick={() => setDialog({ kind: "create" })}
-            >
-              Create question
-            </Button>
-          </span>
-        </Tooltip>
+        <Stack direction="row" spacing={1}>
+          <Tooltip title={canCreate ? "" : "Create a question bank first"}>
+            <span>
+              <Button
+                variant="outlined"
+                startIcon={<UploadFileIcon />}
+                disabled={!canCreate}
+                onClick={() => setDialog({ kind: "import" })}
+              >
+                Import
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title={canCreate ? "" : "Create a question bank first"}>
+            <span>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                disabled={!canCreate}
+                onClick={() => setDialog({ kind: "create" })}
+              >
+                Create question
+              </Button>
+            </span>
+          </Tooltip>
+        </Stack>
       </Stack>
 
       {isPending && <LoadingState message="Loading questions..." />}
@@ -231,6 +256,16 @@ export function QuestionsPage() {
         error={deleteMutation.error}
         onClose={closeDialog}
         onConfirm={handleDeleteConfirm}
+      />
+
+      <ImportQuestionsDialog
+        open={dialog?.kind === "import"}
+        banks={banks}
+        submitting={importMutation.isPending}
+        result={importMutation.data ?? null}
+        error={importMutation.error}
+        onClose={closeDialog}
+        onSubmit={handleImportSubmit}
       />
     </Box>
   );

@@ -1,7 +1,11 @@
+import csv
+import io
+import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +20,40 @@ from app.repositories.question_repository import (
     QuestionRepository,
 )
 from app.repositories.quiz_repository import QuizRepository
+from app.schemas.quiz import BulkImportResponse, BulkImportRowError, QuestionCreate
+
+MAX_IMPORT_ROWS = 500
+
+_CORRECT_LETTER_MAP = {"A": 0, "B": 1, "C": 2, "D": 3}
+
+
+def _parse_csv_rows(content: bytes) -> list[dict]:
+    text = content.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+    rows = []
+    for raw in reader:
+        correct_letter = (raw.get("correct_option") or "").strip().upper()
+        correct_index = _CORRECT_LETTER_MAP.get(correct_letter, -1)
+        options = [
+            {"text": (raw.get(f"option_{k}") or "").strip(), "is_correct": i == correct_index}
+            for i, k in enumerate(["a", "b", "c", "d"])
+        ]
+        rows.append({
+            "text": (raw.get("text") or "").strip(),
+            "explanation": (raw.get("explanation") or "").strip() or None,
+            "marks": (raw.get("marks") or "").strip(),
+            "negative_marks": (raw.get("negative_marks") or "0").strip() or "0",
+            "options": options,
+        })
+    return rows
+
+
+def _parse_json_rows(content: bytes) -> list[dict]:
+    data = json.loads(content.decode("utf-8"))
+    if not isinstance(data, list):
+        raise ValueError("JSON root must be an array")
+    return data
+
 
 # Phase 9B note: every method below that touches a question bank, question,
 # or quiz takes an `organization_id` (the requesting admin's organization) and
@@ -176,6 +214,54 @@ class QuizService:
                 "Cannot delete question: it is assigned to one or more quizzes. "
                 "Remove it from all quizzes first."
             )
+
+    async def bulk_import_questions(
+        self,
+        bank_id: UUID,
+        organization_id: UUID,
+        file_content: bytes,
+        fmt: str,
+    ) -> BulkImportResponse:
+        bank = await self.bank_repo.get_by_id_scoped(bank_id, organization_id)
+        if bank is None:
+            raise LookupError("Question bank not found")
+
+        if fmt == "csv":
+            rows = _parse_csv_rows(file_content)
+        else:
+            rows = _parse_json_rows(file_content)
+
+        if len(rows) > MAX_IMPORT_ROWS:
+            raise ValueError(f"Import exceeds maximum of {MAX_IMPORT_ROWS} rows")
+
+        errors: list[BulkImportRowError] = []
+        imported = 0
+        failed_rows = 0
+
+        for i, raw in enumerate(rows):
+            row_num = i + 1
+            try:
+                validated = QuestionCreate.model_validate(raw)
+            except ValidationError as exc:
+                failed_rows += 1
+                for e in exc.errors():
+                    loc = e.get("loc", ())
+                    field = str(loc[0]) if loc else None
+                    errors.append(BulkImportRowError(row=row_num, field=field, message=e["msg"]))
+                continue
+
+            await self.create_question(
+                bank_id=bank_id,
+                organization_id=organization_id,
+                text=validated.text,
+                marks=validated.marks,
+                negative_marks=validated.negative_marks,
+                explanation=validated.explanation,
+                options=validated.options,
+            )
+            imported += 1
+
+        return BulkImportResponse(imported=imported, failed=failed_rows, errors=errors)
 
     # ── Quizzes ────────────────────────────────────────────────────────────
 

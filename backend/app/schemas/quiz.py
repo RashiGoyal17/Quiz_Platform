@@ -109,6 +109,20 @@ class QuestionResponse(BaseModel):
     updated_at: datetime
 
 
+# ── Bulk import schemas ───────────────────────────────────────────────────────
+
+class BulkImportRowError(BaseModel):
+    row: int
+    field: str | None = None
+    message: str
+
+
+class BulkImportResponse(BaseModel):
+    imported: int
+    failed: int
+    errors: list[BulkImportRowError]
+
+
 # ── Quiz schemas ──────────────────────────────────────────────────────────────
 
 class QuizCreate(BaseModel):
