@@ -1,12 +1,20 @@
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { Alert, Box, Button, Grid, Paper, Snackbar, Stack, Typography } from "@mui/material";
 import { isAxiosError } from "axios";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Link as RouterLink,
+  Navigate,
+  useBlocker,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 
 import type { ApiErrorResponse, TabSwitchResponse } from "../../api/types";
 import { ErrorState } from "../../components/common/ErrorState";
 import { LoadingState } from "../../components/common/LoadingState";
+import { LeaveAttemptDialog } from "../../components/student/LeaveAttemptDialog";
 import { QuestionNavigator } from "../../components/student/QuestionNavigator";
 import { QuestionPanel } from "../../components/student/QuestionPanel";
 import { QuizTimer } from "../../components/student/QuizTimer";
@@ -62,6 +70,30 @@ export function AttemptDetailPage() {
   }, [attempt]);
 
   const isInProgress = attempt?.status === "in_progress";
+
+  // Warn before closing/refreshing the tab while the attempt is still active.
+  useEffect(() => {
+    if (!isInProgress || isFinalized) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isInProgress, isFinalized]);
+
+  // Intercept in-app navigation away from an active attempt. `hasFinalizedRef`
+  // (not `isFinalized` state) is checked because it's set synchronously before
+  // our own redirects to the result page, avoiding a stale-closure self-block.
+  const blocker = useBlocker(
+    useCallback(
+      ({ currentLocation, nextLocation }) =>
+        isInProgress && !hasFinalizedRef.current && currentLocation.pathname !== nextLocation.pathname,
+      [isInProgress],
+    ),
+  );
 
   const finalizeAndGoToResult = (reason?: string) => {
     if (hasFinalizedRef.current) return;
@@ -299,6 +331,12 @@ export function AttemptDetailPage() {
         errorMessage={submitErrorMessage}
         onConfirm={handleSubmit}
         onClose={() => setSubmitDialogOpen(false)}
+      />
+
+      <LeaveAttemptDialog
+        open={blocker.state === "blocked"}
+        onStay={() => blocker.state === "blocked" && blocker.reset()}
+        onLeave={() => blocker.state === "blocked" && blocker.proceed()}
       />
     </Box>
   );

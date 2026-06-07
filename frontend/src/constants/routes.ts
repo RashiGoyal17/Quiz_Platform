@@ -9,6 +9,9 @@ export const ROUTES = {
     quizzes: "/admin/quizzes",
     quizBuilderPath: "/admin/quizzes/:quizId",
     quizBuilder: (quizId: string) => `/admin/quizzes/${quizId}`,
+    attempts: "/admin/attempts",
+    attemptDetailPath: "/admin/attempts/:attemptId",
+    attemptDetail: (attemptId: string) => `/admin/attempts/${attemptId}`,
   },
   student: {
     dashboard: "/student/dashboard",

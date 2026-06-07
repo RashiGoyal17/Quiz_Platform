@@ -45,6 +45,9 @@ def _svc(session: AsyncMock | None = None) -> QuizService:
     return QuizService(session or AsyncMock())
 
 
+_ORG_ID = uuid.uuid4()
+
+
 # ── update_quiz ───────────────────────────────────────────────────────────────
 
 class TestUpdateQuiz:
@@ -53,9 +56,9 @@ class TestUpdateQuiz:
         session = AsyncMock()
         svc = _svc(session)
         mock_quiz = _mock_quiz()
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=mock_quiz)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=mock_quiz)
 
-        await svc.update_quiz(mock_quiz.id, {"title": "New Title"})
+        await svc.update_quiz(mock_quiz.id, _ORG_ID, {"title": "New Title"})
 
         session.flush.assert_awaited_once()
         session.refresh.assert_awaited_once_with(mock_quiz)
@@ -69,9 +72,9 @@ class TestUpdateQuiz:
 
         svc = _svc(session)
         mock_quiz = _mock_quiz()
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=mock_quiz)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=mock_quiz)
 
-        result = await svc.update_quiz(mock_quiz.id, {"title": "X"})
+        result = await svc.update_quiz(mock_quiz.id, _ORG_ID, {"title": "X"})
 
         assert call_order == ["flush", "refresh"], "refresh must come after flush"
         assert result is mock_quiz
@@ -80,28 +83,28 @@ class TestUpdateQuiz:
         session = AsyncMock()
         svc = _svc(session)
         mock_quiz = _mock_quiz()
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=mock_quiz)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=mock_quiz)
 
-        await svc.update_quiz(mock_quiz.id, {"title": "Updated", "duration_minutes": 90})
+        await svc.update_quiz(mock_quiz.id, _ORG_ID, {"title": "Updated", "duration_minutes": 90})
 
         assert mock_quiz.title == "Updated"
         assert mock_quiz.duration_minutes == 90
 
     async def test_unknown_id_raises_lookup_error(self):
         svc = _svc()
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=None)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=None)
 
         with pytest.raises(LookupError, match="Quiz not found"):
-            await svc.update_quiz(uuid.uuid4(), {"title": "X"})
+            await svc.update_quiz(uuid.uuid4(), _ORG_ID, {"title": "X"})
 
     async def test_no_refresh_on_not_found(self):
         """refresh must NOT be called when the quiz does not exist."""
         session = AsyncMock()
         svc = _svc(session)
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=None)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=None)
 
         with pytest.raises(LookupError):
-            await svc.update_quiz(uuid.uuid4(), {})
+            await svc.update_quiz(uuid.uuid4(), _ORG_ID, {})
 
         session.refresh.assert_not_awaited()
 
@@ -113,12 +116,12 @@ class TestPublishQuiz:
         session = AsyncMock()
         svc = _svc(session)
         mock_quiz = _mock_quiz()
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=mock_quiz)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=mock_quiz)
         svc.quiz_repo.get_quiz_questions_ordered = AsyncMock(
             return_value=[MagicMock(spec=QuizQuestion)]
         )
 
-        await svc.publish_quiz(mock_quiz.id, uuid.uuid4())
+        await svc.publish_quiz(mock_quiz.id, _ORG_ID, uuid.uuid4())
 
         session.flush.assert_awaited_once()
         session.refresh.assert_awaited_once_with(mock_quiz)
@@ -127,12 +130,12 @@ class TestPublishQuiz:
         session = AsyncMock()
         svc = _svc(session)
         mock_quiz = _mock_quiz(is_published=False)
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=mock_quiz)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=mock_quiz)
         svc.quiz_repo.get_quiz_questions_ordered = AsyncMock(
             return_value=[MagicMock(spec=QuizQuestion)]
         )
 
-        await svc.publish_quiz(mock_quiz.id, uuid.uuid4())
+        await svc.publish_quiz(mock_quiz.id, _ORG_ID, uuid.uuid4())
 
         assert mock_quiz.is_published is True
 
@@ -140,21 +143,21 @@ class TestPublishQuiz:
         session = AsyncMock()
         svc = _svc(session)
         mock_quiz = _mock_quiz()
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=mock_quiz)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=mock_quiz)
         svc.quiz_repo.get_quiz_questions_ordered = AsyncMock(return_value=[])
 
         with pytest.raises(ValueError, match="no questions"):
-            await svc.publish_quiz(mock_quiz.id, uuid.uuid4())
+            await svc.publish_quiz(mock_quiz.id, _ORG_ID, uuid.uuid4())
 
         session.flush.assert_not_awaited()
         session.refresh.assert_not_awaited()
 
     async def test_unknown_id_raises_lookup_error(self):
         svc = _svc()
-        svc.quiz_repo.get_by_id = AsyncMock(return_value=None)
+        svc.quiz_repo.get_by_id_scoped = AsyncMock(return_value=None)
 
         with pytest.raises(LookupError, match="Quiz not found"):
-            await svc.publish_quiz(uuid.uuid4(), uuid.uuid4())
+            await svc.publish_quiz(uuid.uuid4(), _ORG_ID, uuid.uuid4())
 
 
 # ── update_question_bank ──────────────────────────────────────────────────────
@@ -164,9 +167,9 @@ class TestUpdateQuestionBank:
         session = AsyncMock()
         svc = _svc(session)
         mock_bank = _mock_bank()
-        svc.bank_repo.get_by_id = AsyncMock(return_value=mock_bank)
+        svc.bank_repo.get_by_id_scoped = AsyncMock(return_value=mock_bank)
 
-        await svc.update_question_bank(mock_bank.id, {"name": "New Name"})
+        await svc.update_question_bank(mock_bank.id, _ORG_ID, {"name": "New Name"})
 
         session.flush.assert_awaited_once()
         session.refresh.assert_awaited_once_with(mock_bank)
@@ -179,9 +182,9 @@ class TestUpdateQuestionBank:
 
         svc = _svc(session)
         mock_bank = _mock_bank()
-        svc.bank_repo.get_by_id = AsyncMock(return_value=mock_bank)
+        svc.bank_repo.get_by_id_scoped = AsyncMock(return_value=mock_bank)
 
-        result = await svc.update_question_bank(mock_bank.id, {"name": "X"})
+        result = await svc.update_question_bank(mock_bank.id, _ORG_ID, {"name": "X"})
 
         assert call_order == ["flush", "refresh"]
         assert result is mock_bank
@@ -190,10 +193,9 @@ class TestUpdateQuestionBank:
         session = AsyncMock()
         svc = _svc(session)
         mock_bank = _mock_bank()
-        svc.bank_repo.get_by_id = AsyncMock(return_value=mock_bank)
+        svc.bank_repo.get_by_id_scoped = AsyncMock(return_value=mock_bank)
 
-        await svc.update_question_bank(
-            mock_bank.id, {"name": "Updated Bank", "description": "New desc"}
+        await svc.update_question_bank(mock_bank.id, _ORG_ID, {"name": "Updated Bank", "description": "New desc"}
         )
 
         assert mock_bank.name == "Updated Bank"
@@ -201,17 +203,17 @@ class TestUpdateQuestionBank:
 
     async def test_unknown_id_raises_lookup_error(self):
         svc = _svc()
-        svc.bank_repo.get_by_id = AsyncMock(return_value=None)
+        svc.bank_repo.get_by_id_scoped = AsyncMock(return_value=None)
 
         with pytest.raises(LookupError, match="Question bank not found"):
-            await svc.update_question_bank(uuid.uuid4(), {"name": "X"})
+            await svc.update_question_bank(uuid.uuid4(), _ORG_ID, {"name": "X"})
 
     async def test_no_refresh_on_not_found(self):
         session = AsyncMock()
         svc = _svc(session)
-        svc.bank_repo.get_by_id = AsyncMock(return_value=None)
+        svc.bank_repo.get_by_id_scoped = AsyncMock(return_value=None)
 
         with pytest.raises(LookupError):
-            await svc.update_question_bank(uuid.uuid4(), {})
+            await svc.update_question_bank(uuid.uuid4(), _ORG_ID, {})
 
         session.refresh.assert_not_awaited()

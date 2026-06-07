@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_admin, require_student
+from app.api.deps import require_admin_with_org, require_student
 from app.database import get_db
 from app.models.user import User
 from app.schemas.analytics import (
@@ -91,10 +91,10 @@ async def get_student_history(
 async def get_quiz_analytics(
     quiz_id: uuid.UUID,
     svc: AnalyticsService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuizAnalyticsResponse:
     try:
-        return await svc.get_quiz_analytics(quiz_id)
+        return await svc.get_quiz_analytics(quiz_id, admin.organization_id)
     except (LookupError, ValueError) as exc:
         _handle(exc)
 
@@ -114,10 +114,10 @@ async def get_quiz_analytics(
 async def get_quiz_question_analytics(
     quiz_id: uuid.UUID,
     svc: AnalyticsService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> QuizQuestionAnalyticsResponse:
     try:
-        return await svc.get_quiz_question_analytics(quiz_id)
+        return await svc.get_quiz_question_analytics(quiz_id, admin.organization_id)
     except (LookupError, ValueError) as exc:
         _handle(exc)
 
@@ -135,6 +135,6 @@ async def get_quiz_question_analytics(
 )
 async def get_admin_dashboard(
     svc: AnalyticsService = Depends(_svc),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin_with_org),
 ) -> AdminDashboardResponse:
-    return await svc.get_admin_dashboard()
+    return await svc.get_admin_dashboard(admin.organization_id)

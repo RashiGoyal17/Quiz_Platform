@@ -17,6 +17,21 @@ class QuestionBankRepository(BaseRepository[QuestionBank]):
         )
         return list(result.scalars().all())
 
+    async def get_by_organization(self, organization_id: UUID) -> list[QuestionBank]:
+        result = await self.session.execute(
+            select(QuestionBank).where(QuestionBank.organization_id == organization_id)
+        )
+        return list(result.scalars().all())
+
+    async def get_by_id_scoped(self, bank_id: UUID, organization_id: UUID) -> QuestionBank | None:
+        result = await self.session.execute(
+            select(QuestionBank).where(
+                QuestionBank.id == bank_id,
+                QuestionBank.organization_id == organization_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
 
 class QuestionRepository(BaseRepository[Question]):
     model = Question
@@ -32,6 +47,21 @@ class QuestionRepository(BaseRepository[Question]):
         result = await self.session.execute(
             select(Question)
             .where(Question.id == question_id)
+            .options(selectinload(Question.options))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_with_options_scoped(
+        self, question_id: UUID, organization_id: UUID
+    ) -> Question | None:
+        from sqlalchemy.orm import selectinload
+        result = await self.session.execute(
+            select(Question)
+            .join(QuestionBank, QuestionBank.id == Question.question_bank_id)
+            .where(
+                Question.id == question_id,
+                QuestionBank.organization_id == organization_id,
+            )
             .options(selectinload(Question.options))
         )
         return result.scalar_one_or_none()

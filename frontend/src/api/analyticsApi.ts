@@ -1,6 +1,11 @@
 import { apiClient } from "./axiosClient";
 import { ENDPOINTS } from "./endpoints";
-import type { StudentAnalytics, StudentHistoryParams, StudentHistoryResponse } from "./types";
+import type {
+  AdminDashboard,
+  StudentAnalytics,
+  StudentHistoryParams,
+  StudentHistoryResponse,
+} from "./types";
 
 export const analyticsApi = {
   async getMe(): Promise<StudentAnalytics> {
@@ -16,6 +21,11 @@ export const analyticsApi = {
         quiz_id: params.quizId,
       },
     });
+    return data;
+  },
+
+  async getAdminDashboard(): Promise<AdminDashboard> {
+    const { data } = await apiClient.get<AdminDashboard>(ENDPOINTS.analytics.adminDashboard);
     return data;
   },
 };
